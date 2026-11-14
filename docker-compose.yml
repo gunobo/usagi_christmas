@@ -27,9 +27,18 @@ services:
     build: ./app
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8088:80"   # Cloudflare Tunnel → http://localhost:8088
+      - "127.0.0.1:8088:80"   # 로컬 확인용 (외부 공개는 cloudflared가 담당)
     depends_on:
       - api
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN을 .env에 넣어주세요}
+    depends_on:
+      - web
 
 volumes:
   pgdata:

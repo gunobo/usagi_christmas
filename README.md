@@ -8,14 +8,11 @@
 cp .env.example .env   # 값 수정
 docker compose up -d --build
 ```
-Cloudflare Tunnel `config.yml` ingress에 추가:
-```yaml
-- hostname: usagi.imjemin.co.kr
-  service: http://localhost:8088
-```
-```bash
-cloudflared tunnel route dns <터널이름> usagi.imjemin.co.kr
-```
+Cloudflare Tunnel도 compose 안에서 같이 떠요 (`cloudflared` 서비스).
+1. Cloudflare 대시보드 → Zero Trust → Networks → Tunnels → **Create tunnel** (Cloudflared)
+2. 발급된 토큰을 `.env`의 `TUNNEL_TOKEN`에 넣기
+3. Public Hostname 추가: `usagi.imjemin.co.kr` → Service `HTTP` / `web:80`
+4. `docker compose up -d --build`
 
 ## 로컬 개발
 ```bash
@@ -31,3 +28,6 @@ curl -X DELETE https://usagi.imjemin.co.kr/api/guestbook/<id> -H "X-Admin-Token:
 
 ## License
 MIT © 2026 임제민 (gunobo) — [LICENSE](LICENSE)
+
+## 관리자 페이지
+`https://usagi.imjemin.co.kr/admin/` 에서 `.env`의 `ADMIN_TOKEN`으로 접속 → 전체 방명록(IP 포함) 조회·검색·삭제
