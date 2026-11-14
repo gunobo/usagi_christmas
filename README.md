@@ -17,7 +17,7 @@ Cloudflare Tunnel도 compose 안에서 같이 떠요 (`cloudflared` 서비스).
 ## 로컬 개발
 ```bash
 docker compose up -d db
-cd backend && pip install -r requirements.txt && uvicorn main:app --reload
+cd backend && pip install -r requirements.txt && MEDIA_DIR=./media uvicorn main:app --reload
 cd app && npm i && EXPO_PUBLIC_API_URL=http://<내PC IP>:8000 npx expo start   # 폰: Expo Go로 QR 스캔
 ```
 
@@ -31,3 +31,5 @@ MIT © 2026 임제민 (gunobo) — [LICENSE](LICENSE)
 
 ## 관리자 페이지
 `https://usagi.imjemin.co.kr/admin/` 에서 `.env`의 `ADMIN_TOKEN`으로 접속 → 전체 방명록(IP 포함) 조회·검색·삭제
+- **이미지·음원 탭**: 캐릭터 이미지 여러 개 업로드(활성 이미지를 순서대로 번갈아 사용, ◀▶로 순서 변경), 음원 업로드(활성 1개를 8D로 재생, 없으면 기본 징글벨)
+- 업로드 파일은 docker 볼륨 `media`에 저장 (이미지 10MB, 음원 40MB 제한)

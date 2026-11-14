@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Pengu Carol",
+    "name": "우사기의 크리스마스",
     "slug": "usagi-carol",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -20,7 +20,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "name": "우사기의 크리스마스",
+      "shortName": "우사기의 크리스마스"
     },
     "backgroundColor": "#07090c"
   }

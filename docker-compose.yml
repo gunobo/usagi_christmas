@@ -19,6 +19,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://usagi:${POSTGRES_PASSWORD:-usagi}@db:5432/usagi
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      MEDIA_DIR: /data/media
+    volumes:
+      - media:/data/media
     depends_on:
       db:
         condition: service_healthy
@@ -42,3 +45,4 @@ services:
 
 volumes:
   pgdata:
+  media:

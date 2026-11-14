@@ -3,3 +3,5 @@ node_modules
 dist
 .expo
 __pycache__
+backend/media
+backend/player/_old

@@ -17,16 +17,47 @@
   table{width:100%;border-collapse:collapse}
   td,th{padding:8px;border-bottom:1px solid #1c232a;text-align:left;vertical-align:top}
   th{color:#8a96a0;font-weight:600} td.t{word-break:break-word} .s{color:#8a96a0;font-size:12px}
-  #msg{color:#8a96a0;margin:8px 0}
+  #msg,#mmsg{color:#8a96a0;margin:8px 0}
+  .tabs{display:flex;gap:6px;margin-bottom:14px}
+  .tabs button{background:#11161c;color:#8a96a0;border:1px solid #283038}
+  .tabs button.on{background:#5fd3a0;color:#07120d}
+  section[hidden]{display:none}
+  h2{font-size:15px;color:#b9c3c8;margin:18px 0 8px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+  .card{background:#11161c;border:1px solid #283038;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px}
+  .card.off{opacity:.45}
+  .card img{width:100%;aspect-ratio:1;object-fit:contain;background:#07090c;border-radius:6px}
+  .card .n{font-size:12px;color:#8a96a0;word-break:break-all}
+  .card .row{display:flex;gap:4px;flex-wrap:wrap}
+  .card button{padding:4px 8px;font-size:12px}
+  .card button.sub{background:#1c232a;color:#dde3e8}
+  audio{width:100%}
+  label.up{display:inline-block;padding:8px 14px;border-radius:8px;background:#5fd3a0;color:#07120d;font-weight:700;cursor:pointer}
+  label.up input{display:none}
 </style>
 </head>
 <body><main>
 <h1>📝 방명록 관리자</h1>
 <div class="bar"><input id="token" type="password" placeholder="ADMIN_TOKEN"><button id="login">접속</button></div>
+<div class="tabs"><button id="tabG" class="on">방명록</button><button id="tabM">이미지·음원·문구</button></div>
+<section id="secM" hidden>
+  <h2>화면 문구</h2>
+  <div class="bar"><input id="sHandle" placeholder="@인스타 아이디" maxlength="40"><input id="sName" placeholder="상단 이름 (SANTA PENGU)" maxlength="40"></div>
+  <div class="bar"><input id="sEdition" placeholder="에디션 (SCARF EDITION)" maxlength="40"><input id="sTitle" placeholder="타이틀 (Pengu Carol #1)" maxlength="40"><button id="sSave">저장</button></div>
+  <h2>캐릭터 이미지 <span class="n">(활성 이미지를 순서대로 번갈아 사용 · 투명 PNG 권장)</span></h2>
+  <label class="up">+ 이미지 추가<input id="upImg" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple></label>
+  <div id="imgs" class="grid" style="margin-top:10px"></div>
+  <h2>음원 <span class="n">(활성 1개만 재생 · 없으면 기본 징글벨)</span></h2>
+  <label class="up">+ 음원 추가<input id="upAud" type="file" accept="audio/*"></label>
+  <div id="auds" class="grid" style="margin-top:10px"></div>
+  <div id="mmsg"></div>
+</section>
+<section id="secG">
 <div class="bar"><input id="q" placeholder="닉네임·내용 검색"><button id="search">검색</button></div>
 <div id="msg">토큰을 입력하세요.</div>
 <table><thead><tr><th>#</th><th>닉네임</th><th>내용</th><th>IP / 시간</th><th></th></tr></thead><tbody id="rows"></tbody></table>
 <div class="bar" style="margin-top:12px"><button id="more" hidden>더 보기</button></div>
+</section>
 </main>
 <script>
 const $ = id => document.getElementById(id);
@@ -67,7 +98,62 @@ function row(e) {
   return tr;
 }
 
-$('login').onclick = () => { token = $('token').value.trim(); sessionStorage.setItem('adminToken', token); load(true); };
+$('login').onclick = () => { token = $('token').value.trim(); sessionStorage.setItem('adminToken', token); load(true); loadMedia(); };
+
+// ───────── 탭 ─────────
+const tab = m => { $('secG').hidden = m; $('secM').hidden = !m; $('tabG').classList.toggle('on', !m); $('tabM').classList.toggle('on', m); };
+$('tabG').onclick = () => tab(false);
+$('tabM').onclick = () => { tab(true); loadMedia(); };
+
+// ───────── 이미지·음원 ─────────
+async function loadMedia() {
+  try {
+    const st = await api('/api/admin/settings');
+    $('sHandle').value = st.handle; $('sName').value = st.name; $('sEdition').value = st.edition; $('sTitle').value = st.title;
+    const list = await api('/api/admin/media');
+    $('imgs').replaceChildren(...list.filter(m => m.kind === 'image').map(card));
+    $('auds').replaceChildren(...list.filter(m => m.kind === 'audio').map(card));
+    $('mmsg').textContent = '';
+  } catch (err) { $('mmsg').textContent = err.message; }
+}
+
+function card(m) {
+  const el = document.createElement('div'); el.className = 'card' + (m.active ? '' : ' off');
+  if (m.kind === 'image') { const im = document.createElement('img'); im.src = m.url; el.append(im); }
+  else { const au = document.createElement('audio'); au.controls = true; au.preload = 'none'; au.src = m.url; el.append(au); }
+  const n = document.createElement('div'); n.className = 'n'; n.textContent = `#${m.sort} ${m.original_name}`; el.append(n);
+  const row = document.createElement('div'); row.className = 'row';
+  const btn = (txt, fn, cls) => { const b = document.createElement('button'); b.textContent = txt; if (cls) b.className = cls; b.onclick = fn; row.append(b); return b; };
+  btn(m.active ? '사용 중' : '사용', () => patch(m.id, { active: !m.active }), m.active ? '' : 'sub');
+  if (m.kind === 'image') { btn('◀', () => patch(m.id, { sort: m.sort - 1 }), 'sub'); btn('▶', () => patch(m.id, { sort: m.sort + 1 }), 'sub'); }
+  const del = btn('삭제', async () => {
+    if (del.dataset.sure !== '1') { del.dataset.sure = '1'; del.textContent = '확인'; return; }
+    try { await api('/api/admin/media/' + m.id, { method: 'DELETE' }); loadMedia(); } catch (err) { $('mmsg').textContent = err.message; }
+  }, 'del');
+  el.append(row);
+  return el;
+}
+
+async function patch(id, body) {
+  try { await api('/api/admin/media/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); loadMedia(); }
+  catch (err) { $('mmsg').textContent = err.message; }
+}
+
+async function upload(kind, files) {
+  if (!files.length) return;
+  const fd = new FormData(); fd.append('kind', kind); for (const f of files) fd.append('files', f);
+  $('mmsg').textContent = '업로드 중...';
+  try { await api('/api/admin/media', { method: 'POST', body: fd }); loadMedia(); }
+  catch (err) { $('mmsg').textContent = err.message; }
+}
+$('sSave').onclick = async () => {
+  let handle = $('sHandle').value.trim(); if (handle && !handle.startsWith('@')) handle = '@' + handle;
+  const body = { handle, name: $('sName').value, edition: $('sEdition').value, title: $('sTitle').value };
+  try { await api('/api/admin/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); $('mmsg').textContent = '저장했어요.'; loadMedia(); }
+  catch (err) { $('mmsg').textContent = err.message; }
+};
+$('upImg').onchange = e => { upload('image', e.target.files); e.target.value = ''; };
+$('upAud').onchange = e => { upload('audio', e.target.files); e.target.value = ''; };
 $('search').onclick = () => load(true);
 $('q').onkeydown = e => { if (e.key === 'Enter') load(true); };
 $('more').onclick = () => load(false);
