@@ -369,12 +369,12 @@ function titleCard(t) {
 // ───────── 렌더 루프 ─────────
 let ac = null, start = 0, looping = true, loops = 0;
 function frame() {
-  const tRaw = ac ? ac.currentTime - start : 0;
+  const tRaw = ac ? Math.max(0, ac.currentTime - start) : 0; // 재시작 직후 음수 시간 방지 (반복 시 멈춤 버그)
   if (ac && tRaw >= END) { loops++; start = startMusic(ac, audioBuf); requestAnimationFrame(frame); return; } // 무한 반복
   const cycle = loops * Math.ceil(END / TOTAL) + Math.floor(tRaw / TOTAL), t = tRaw % TOTAL;
   let st = STAGES.find(s => t >= s[1] && t < s[2]) || STAGES[0];
   if (st[0] === 'TITLE' && cycle > 0) st = ['쿵쿵', 0, 2.8, (S, p, tt) => stBounce(S, tt)];
-  const S = sets[(cycle * 3 + (t >= 15) + (t >= 28.5)) % sets.length];
+  const S = sets[(((cycle * 3 + (t >= 15) + (t >= 28.5)) % sets.length) + sets.length) % sets.length];
   const p = clamp01((t - st[1]) / (st[2] - st[1]));
 
   background(t);
