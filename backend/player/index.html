@@ -28,7 +28,7 @@
 // ───────── 설정 ─────────
 const W = 1080, H = 1920, CX = 540, FOOT = 1330;
 const BPM = 128, BEAT = 60 / BPM, TOTAL = 31;
-let NAME = 'SANTA PENGU', EDITION = 'SCARF EDITION', TITLE = 'Pengu Carol #1', HANDLE = '@PENGU_CAROL';
+let STYLE = 'ascii', NAME = 'SANTA PENGU', EDITION = 'SCARF EDITION', TITLE = 'Pengu Carol #1', HANDLE = '@PENGU_CAROL';
 const RED = '#e5484d', GREEN = '#3fb27f', GOLD = '#f2c14e', SNOW = '#f4f6ff';
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 const ease = x => 1 - Math.pow(1 - Math.min(Math.max(x, 0), 1), 3);
@@ -36,6 +36,15 @@ const clamp01 = x => Math.min(Math.max(x, 0), 1);
 let sets = [], END = TOTAL, audioUrl = null, audioBuf = null, notes = [];
 
 // ───────── 이미지 준비: 배경 제거 + 크기 맞춤 + 파티클 + RGB 분리용 색 버전 ─────────
+const STEP = 10, RAMP = ':-=+*%#@', GLYPHS_DARK = '01{}[]<>/$&';
+// 렌더 스타일: ascii(색 글자) / ansi(16색 블록 셰이드) / pixel(저해상도 도트)
+const look = S => STYLE === 'ansi' ? S.ansi : STYLE === 'pixel' ? S.pix : S.asc;
+const tinted = (S, col) => { const key = STYLE + col; if (S.tints[key]) return S.tints[key];
+  const src = look(S), t = document.createElement('canvas'); t.width = S.w; t.height = S.h; const x = t.getContext('2d');
+  x.drawImage(src, 0, 0); x.globalCompositeOperation = 'source-atop'; x.fillStyle = col; x.fillRect(0, 0, S.w, S.h); return S.tints[key] = t; };
+const ANSI16 = [[0,0,0],[205,49,49],[13,188,121],[229,229,16],[36,114,200],[188,63,188],[17,168,205],[229,229,229],
+  [102,102,102],[241,76,76],[35,209,139],[245,245,67],[59,142,234],[214,112,214],[41,184,219],[255,255,255]];
+const nearestAnsi = (r, g2, b) => { let best = 0, bd = 1e9; ANSI16.forEach(([R, G, B], i) => { const d = (R - r) ** 2 + (G - g2) ** 2 + (B - b) ** 2; if (d < bd) { bd = d; best = i; } }); return ANSI16[best]; };
 function prepImage(img) {
   const scale = Math.min(720 / img.width, 900 / img.height);
   const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
@@ -51,17 +60,46 @@ function prepImage(img) {
     }
     o.putImageData(id, 0, 0);
   }
-  const tint = col => { const t = document.createElement('canvas'); t.width = w; t.height = h; const x = t.getContext('2d');
-    x.drawImage(c, 0, 0); x.globalCompositeOperation = 'source-atop'; x.fillStyle = col; x.fillRect(0, 0, w, h); return t; };
-  const parts = [], STEP = 10;
+  const tint = (src, col) => { const t = document.createElement('canvas'); t.width = w; t.height = h; const x = t.getContext('2d');
+    x.drawImage(src, 0, 0); x.globalCompositeOperation = 'source-atop'; x.fillStyle = col; x.fillRect(0, 0, w, h); return t; };
+  // 터미널 스타일: 픽셀을 색 글자로 바꾼 버전
+  const asc = document.createElement('canvas'); asc.width = w; asc.height = h; const ax = asc.getContext('2d');
+  ax.font = `700 ${STEP + 3}px ui-monospace,Menlo,Consolas,monospace`; ax.textAlign = 'center'; ax.textBaseline = 'middle';
+  const parts = [];
   for (let y = 0; y < h; y += STEP) for (let x = 0; x < w; x += STEP) {
-    const i = (y * w + x) * 4; if (d[i + 3] < 120) continue;
-    parts.push({ tx: CX - w / 2 + x, ty: FOOT - h + y, col: `rgb(${d[i]},${d[i + 1]},${d[i + 2]})`, r: Math.random(), a: Math.random() * Math.PI * 2 });
+    const i = (Math.min(h - 1, y + STEP / 2 | 0) * w + Math.min(w - 1, x + STEP / 2 | 0)) * 4; if (d[i + 3] < 120) continue;
+    const lum = (.299 * d[i] + .587 * d[i + 1] + .114 * d[i + 2]) / 255;
+    const ch = lum < .3 ? GLYPHS_DARK[(x * 7 + y * 3) % GLYPHS_DARK.length] : RAMP[Math.min(RAMP.length - 1, Math.round(lum * (RAMP.length - 1)))];
+    const k = v => Math.min(255, 50 + v * .9) | 0, col = `rgb(${k(d[i])},${k(d[i + 1])},${k(d[i + 2])})`;
+    ax.fillStyle = col; ax.fillText(ch, x + STEP / 2, y + STEP / 2);
+    parts.push({ tx: CX - w / 2 + x, ty: FOOT - h + y, col, ch, r: Math.random(), a: Math.random() * Math.PI * 2 });
   }
-  return { c, w, h, parts, red: tint('rgba(255,40,80,1)'), cyan: tint('rgba(40,230,255,1)') };
+  // ANSI: 16색 팔레트 + ░▒▓█ 셰이드 블록
+  const ansi = document.createElement('canvas'); ansi.width = w; ansi.height = h; const nx = ansi.getContext('2d');
+  for (const q of parts) {
+    const i = (Math.min(h - 1, q.ty - (FOOT - h) + STEP / 2 | 0) * w + Math.min(w - 1, q.tx - (CX - w / 2) + STEP / 2 | 0)) * 4;
+    const [R, G, B] = nearestAnsi(d[i], d[i + 1], d[i + 2]), lum = (.299 * d[i] + .587 * d[i + 1] + .114 * d[i + 2]) / 255;
+    const shade = lum > .75 ? 1 : lum > .5 ? .8 : lum > .25 ? .6 : .9; // █ ▓ ▒ (어두운 외곽선은 진하게)
+    q.ansi = `rgba(${R},${G},${B},${shade})`;
+    const x0 = q.tx - (CX - w / 2), y0 = q.ty - (FOOT - h);
+    nx.fillStyle = q.ansi; nx.fillRect(x0, y0, STEP, STEP);
+    if (shade < 1) { nx.fillStyle = 'rgba(0,0,0,.35)'; for (let k = 0; k < STEP; k += 3) nx.fillRect(x0 + (k % 6 ? 0 : 1), y0 + k, STEP, 1); }
+  }
+  // PIXEL: 저해상도로 줄였다가 색 단계 줄이고 칼같이 확대
+  const PX = 12, sw = Math.ceil(w / PX), shh = Math.ceil(h / PX);
+  const sm = document.createElement('canvas'); sm.width = sw; sm.height = shh; const sx = sm.getContext('2d');
+  sx.drawImage(c, 0, 0, sw, shh); const sd = sx.getImageData(0, 0, sw, shh), dd = sd.data;
+  for (let i = 0; i < dd.length; i += 4) { for (let k = 0; k < 3; k++) dd[i + k] = Math.round(dd[i + k] / 51) * 51; dd[i + 3] = dd[i + 3] > 110 ? 255 : 0; }
+  sx.putImageData(sd, 0, 0);
+  const pix = document.createElement('canvas'); pix.width = w; pix.height = h; const px = pix.getContext('2d');
+  px.imageSmoothingEnabled = false; px.drawImage(sm, 0, 0, sw * PX, shh * PX);
+  px.strokeStyle = 'rgba(0,0,0,.12)'; px.lineWidth = 1; px.globalCompositeOperation = 'source-atop';
+  for (let x = 0; x <= w; x += PX) { px.beginPath(); px.moveTo(x + .5, 0); px.lineTo(x + .5, h); px.stroke(); }
+  for (let y = 0; y <= h; y += PX) { px.beginPath(); px.moveTo(0, y + .5); px.lineTo(w, y + .5); px.stroke(); }
+  return { img: c, asc, ansi, pix, w, h, parts, tints: {} };
 }
 
-function drawImg(S, { dx = 0, dy = 0, sx = 1, sy = 1, rot = 0, alpha = 1, src = S.c, center = false } = {}) {
+function drawImg(S, { dx = 0, dy = 0, sx = 1, sy = 1, rot = 0, alpha = 1, src = look(S), center = false } = {}) {
   g.save(); g.globalAlpha = alpha; g.translate(CX + dx, FOOT + dy - (center ? S.h / 2 : 0)); g.rotate(rot); g.scale(sx, sy);
   g.drawImage(src, -S.w / 2, center ? -S.h / 2 : -S.h, S.w, S.h); g.restore();
 }
@@ -71,7 +109,7 @@ function stGather(S, p) { // 하늘에서 눈처럼 내려와 모이기
   for (const q of S.parts) {
     const k = ease((p * 1.6 - q.r * .6));
     const x = q.tx + Math.sin(q.a + p * 9) * 140 * (1 - k), y = q.ty - (1 - k) * (900 + q.r * 700);
-    g.globalAlpha = .35 + .65 * k; g.fillStyle = q.col; g.fillRect(x, y, 9, 9);
+    g.globalAlpha = .35 + .65 * k; dot(q, x, y);
   }
   g.globalAlpha = 1;
   if (p > .8) drawImg(S, { alpha: (p - .8) / .2 });
@@ -84,11 +122,11 @@ function stBounce(S, t) { // 쿵쿵: 박자마다 찌부·점프·줌
 function stGlitch(S, t) { // 글리치: 가로 조각 밀림 + RGB 분리 + 덜덜
   const beat = Math.floor(t / (BEAT / 2)), seed = n => { const x = Math.sin(beat * 91.7 + n * 13.1) * 43758.5; return x - Math.floor(x); };
   const strong = seed(0) > .35, jx = (seed(1) - .5) * 40, split = strong ? 18 + seed(2) * 30 : 6;
-  drawImg(S, { src: S.cyan, dx: jx - split, alpha: .7 }); drawImg(S, { src: S.red, dx: jx + split, alpha: .7 });
+  drawImg(S, { src: tinted(S, 'rgba(40,230,255,1)'), dx: jx - split, alpha: .7 }); drawImg(S, { src: tinted(S, 'rgba(255,40,80,1)'), dx: jx + split, alpha: .7 });
   const N = 22, sh = S.h / N;
   for (let i = 0; i < N; i++) {
     const off = strong && seed(i + 5) > .6 ? (seed(i + 40) - .5) * 220 : 0;
-    g.drawImage(S.c, 0, i * sh, S.w, sh + 1, CX - S.w / 2 + jx + off, FOOT - S.h + i * sh, S.w, sh + 1);
+    g.drawImage(look(S), 0, i * sh, S.w, sh + 1, CX - S.w / 2 + jx + off, FOOT - S.h + i * sh, S.w, sh + 1);
   }
   if (strong) { g.fillStyle = 'rgba(255,255,255,.08)'; for (let y = 0; y < H; y += 6) g.fillRect(0, y, W, 2); }
 }
@@ -97,7 +135,7 @@ function stJelly(S, t) { // 젤리: 물결치며 출렁
   for (let i = 0; i < N; i++) {
     const top = 1 - i / N, off = Math.sin(i * .18 + t * 9) * 60 * top;
     const y = FOOT - S.h * (1 + squish) + i * sh * (1 + squish);
-    g.drawImage(S.c, 0, i * sh, S.w, sh + 1, CX - S.w / 2 + off, y, S.w, sh * (1 + squish) + 1);
+    g.drawImage(look(S), 0, i * sh, S.w, sh + 1, CX - S.w / 2 + off, y, S.w, sh * (1 + squish) + 1);
   }
 }
 function stSpin(S, p, t) { // 회오리: 빙글빙글 + 잔상 분신
@@ -115,17 +153,22 @@ function stBoom(S, p) { // 펑! 터져서 눈처럼 흩날리기
     const out = ease(p * 2.2), fall = Math.max(0, p - .35);
     const x = q.tx + Math.cos(q.a) * 700 * out * (.3 + q.r) + Math.sin(q.a * 3 + p * 8) * 40 * fall;
     const y = q.ty + Math.sin(q.a) * 700 * out * (.3 + q.r) + fall * fall * 900;
-    g.globalAlpha = 1 - clamp01((p - .6) / .4) * .5; g.fillStyle = fall > .1 && q.r > .5 ? SNOW : q.col; g.fillRect(x, y, 8, 8);
+    g.globalAlpha = 1 - clamp01((p - .6) / .4) * .5; dot(q, x, y, fall > .1 && q.r > .5 ? SNOW : null);
   }
   g.globalAlpha = 1;
 }
 function stReform(S, p) { // 다음 이미지로 다시 뭉치기
   for (const q of S.parts) {
     const k = ease(p * 1.4 - q.r * .3), sx = CX + Math.cos(q.a) * 900, sy = H + 100;
-    g.globalAlpha = .4 + .6 * k; g.fillStyle = q.col; g.fillRect(sx + (q.tx - sx) * k, sy + (q.ty - sy) * k, 9, 9);
+    g.globalAlpha = .4 + .6 * k; dot(q, sx + (q.tx - sx) * k, sy + (q.ty - sy) * k);
   }
   g.globalAlpha = 1;
   if (p > .75) drawImg(S, { alpha: (p - .75) / .25, sx: 1 + .1 * (1 - p), sy: 1 + .1 * (1 - p) });
+}
+function dot(q, x, y, col) {
+  if (STYLE === 'pixel') { g.fillStyle = col || q.col; g.fillRect(x | 0, y | 0, 12, 12); }
+  else if (STYLE === 'ansi') { g.fillStyle = col || q.ansi; g.fillRect(x, y, STEP, STEP); }
+  else { g.fillStyle = col || q.col; g.font = `700 ${STEP + 3}px ui-monospace,Menlo,monospace`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(q.ch, x + 5, y + 5); }
 }
 function ring(k) { if (k < .05) return; g.strokeStyle = `rgba(242,193,78,${k * .8})`; g.lineWidth = 6; g.beginPath(); g.ellipse(CX, FOOT, 380 * (1.4 - k), 60 * (1.4 - k), 0, 0, 7); g.stroke(); }
 
@@ -318,11 +361,11 @@ function titleCard(t) {
 }
 
 // ───────── 렌더 루프 ─────────
-let ac = null, start = 0, looping = true;
+let ac = null, start = 0, looping = true, loops = 0;
 function frame() {
   const tRaw = ac ? ac.currentTime - start : 0;
-  if (ac && tRaw >= END) { document.getElementById('ui').classList.remove('hide'); document.getElementById('play').textContent = '↻ 한 번 더'; looping = false; return; }
-  const cycle = Math.floor(tRaw / TOTAL), t = tRaw % TOTAL;
+  if (ac && tRaw >= END) { loops++; start = startMusic(ac, audioBuf); requestAnimationFrame(frame); return; } // 무한 반복
+  const cycle = loops * Math.ceil(END / TOTAL) + Math.floor(tRaw / TOTAL), t = tRaw % TOTAL;
   let st = STAGES.find(s => t >= s[1] && t < s[2]) || STAGES[0];
   if (st[0] === 'TITLE' && cycle > 0) st = ['쿵쿵', 0, 2.8, (S, p, tt) => stBounce(S, tt)];
   const S = sets[(cycle * 3 + (t >= 15) + (t >= 28.5)) % sets.length];
@@ -342,7 +385,7 @@ sets = [prepImage(defaultCharacter())];
 frame();
 document.getElementById('play').onclick = async () => {
   if (ac) await ac.close();
-  ac = new AudioContext(); await ac.resume();
+  ac = new AudioContext(); await ac.resume(); loops = 0;
   const btn = document.getElementById('play');
   if (audioUrl && !audioBuf) {
     btn.textContent = '음원 불러오는 중...';
@@ -362,7 +405,7 @@ const loadImg = url => new Promise((ok, no) => { const im = new Image(); im.onlo
     const imgs = (await Promise.allSettled(m.images.map(x => loadImg(x.url)))).filter(r => r.status === 'fulfilled').map(r => r.value);
     if (imgs.length) sets = imgs.map(prepImage);
     if (m.audio) audioUrl = m.audio.url;
-    if (m.settings) ({ name: NAME, edition: EDITION, title: TITLE, handle: HANDLE } = m.settings);
+    if (m.settings) ({ name: NAME, edition: EDITION, title: TITLE, handle: HANDLE, style: STYLE } = m.settings);
   } catch {}
 })();
 async function loadNotes() { try { notes = await (await fetch('/api/guestbook?limit=15')).json(); } catch {} }

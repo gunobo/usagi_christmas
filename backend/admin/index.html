@@ -43,7 +43,7 @@
 <section id="secM" hidden>
   <h2>화면 문구</h2>
   <div class="bar"><input id="sHandle" placeholder="@인스타 아이디" maxlength="40"><input id="sName" placeholder="상단 이름 (SANTA PENGU)" maxlength="40"></div>
-  <div class="bar"><input id="sEdition" placeholder="에디션 (SCARF EDITION)" maxlength="40"><input id="sTitle" placeholder="타이틀 (Pengu Carol #1)" maxlength="40"><button id="sSave">저장</button></div>
+  <div class="bar"><input id="sEdition" placeholder="에디션 (SCARF EDITION)" maxlength="40"><input id="sTitle" placeholder="타이틀 (Pengu Carol #1)" maxlength="40"><select id="sStyle" style="padding:8px;border-radius:8px;background:#11161c;color:#dde3e8;border:1px solid #283038"><option value="ascii">ASCII (색 글자)</option><option value="ansi">ANSI (16색 블록)</option><option value="pixel">PIXEL (도트)</option></select><button id="sSave">저장</button></div>
   <h2>캐릭터 이미지 <span class="n">(활성 이미지를 순서대로 번갈아 사용 · 투명 PNG 권장)</span></h2>
   <label class="up">+ 이미지 추가<input id="upImg" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple></label>
   <div id="imgs" class="grid" style="margin-top:10px"></div>
@@ -109,7 +109,7 @@ $('tabM').onclick = () => { tab(true); loadMedia(); };
 async function loadMedia() {
   try {
     const st = await api('/api/admin/settings');
-    $('sHandle').value = st.handle; $('sName').value = st.name; $('sEdition').value = st.edition; $('sTitle').value = st.title;
+    $('sHandle').value = st.handle; $('sName').value = st.name; $('sEdition').value = st.edition; $('sTitle').value = st.title; $('sStyle').value = st.style;
     const list = await api('/api/admin/media');
     $('imgs').replaceChildren(...list.filter(m => m.kind === 'image').map(card));
     $('auds').replaceChildren(...list.filter(m => m.kind === 'audio').map(card));
@@ -148,7 +148,7 @@ async function upload(kind, files) {
 }
 $('sSave').onclick = async () => {
   let handle = $('sHandle').value.trim(); if (handle && !handle.startsWith('@')) handle = '@' + handle;
-  const body = { handle, name: $('sName').value, edition: $('sEdition').value, title: $('sTitle').value };
+  const body = { handle, name: $('sName').value, edition: $('sEdition').value, title: $('sTitle').value, style: $('sStyle').value };
   try { await api('/api/admin/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); $('mmsg').textContent = '저장했어요.'; loadMedia(); }
   catch (err) { $('mmsg').textContent = err.message; }
 };

@@ -62,7 +62,7 @@ class Setting(Base):
 Base.metadata.create_all(engine)
 
 # 플레이어 화면 문구 (관리자 수정 가능)
-DEFAULT_SETTINGS = {"handle": "@PENGU_CAROL", "name": "SANTA PENGU", "edition": "SCARF EDITION", "title": "Pengu Carol #1"}
+DEFAULT_SETTINGS = {"handle": "@PENGU_CAROL", "name": "SANTA PENGU", "edition": "SCARF EDITION", "title": "Pengu Carol #1", "style": "ascii"}
 
 
 def get_settings(s: Session) -> dict:
@@ -115,6 +115,7 @@ class SettingsIn(BaseModel):
     name: str | None = Field(None, max_length=40)
     edition: str | None = Field(None, max_length=40)
     title: str | None = Field(None, max_length=40)
+    style: str | None = Field(None, pattern="^(ascii|ansi|pixel)$")
 
 
 class AdminPage(BaseModel):
