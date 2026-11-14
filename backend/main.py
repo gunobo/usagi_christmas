@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 임제민 (gunobo)
 import os
+import hashlib
 import secrets
 import time
 import uuid
-from datetime import datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
@@ -57,6 +58,14 @@ class Setting(Base):
     __tablename__ = "settings"
     key: Mapped[str] = mapped_column(String(40), primary_key=True)
     value: Mapped[str] = mapped_column(String(200), default="")
+
+
+class Visit(Base):
+    __tablename__ = "visits"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    vid: Mapped[str] = mapped_column(String(32), index=True)  # IP+UA 해시 (원본 IP 저장 안 함)
+    day: Mapped[str] = mapped_column(String(10), index=True)  # KST 기준 YYYY-MM-DD
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 Base.metadata.create_all(engine)
@@ -182,6 +191,44 @@ def delete_entry(entry_id: int, s: Session = Depends(db)):
     if e:
         s.delete(e)
         s.commit()
+
+
+# ───────── 접속자 통계 ─────────
+KST = timezone(timedelta(hours=9))
+VISIT_SALT = os.getenv("VISIT_SALT", ADMIN_TOKEN or "usagi")
+_last_visit: dict[str, float] = {}
+
+
+@app.post("/api/visit", status_code=204)
+def track_visit(req: Request, s: Session = Depends(db)):
+    vid = hashlib.sha256(f"{VISIT_SALT}|{client_ip(req)}|{req.headers.get('user-agent', '')}".encode()).hexdigest()[:32]
+    now = time.time()
+    if now - _last_visit.get(vid, 0) < 600:  # 같은 사람 10분 안 새로고침은 1번으로
+        return
+    _last_visit[vid] = now
+    s.add(Visit(vid=vid, day=datetime.now(KST).strftime("%Y-%m-%d")))
+    s.commit()
+
+
+@app.get("/api/admin/stats", dependencies=[Depends(require_admin)])
+def admin_stats(days: int = 14, s: Session = Depends(db)):
+    today = datetime.now(KST).strftime("%Y-%m-%d")
+    since = (datetime.now(KST) - timedelta(days=max(1, min(days, 90)) - 1)).strftime("%Y-%m-%d")
+    total_views = s.scalar(select(func.count(Visit.id))) or 0
+    total_unique = s.scalar(select(func.count(func.distinct(Visit.vid)))) or 0
+    today_views = s.scalar(select(func.count(Visit.id)).where(Visit.day == today)) or 0
+    today_unique = s.scalar(select(func.count(func.distinct(Visit.vid))).where(Visit.day == today)) or 0
+    rows = s.execute(select(Visit.day, func.count(Visit.id), func.count(func.distinct(Visit.vid)))
+                     .where(Visit.day >= since).group_by(Visit.day).order_by(Visit.day)).all()
+    by_day = {d: (v, u) for d, v, u in rows}
+    start = date.fromisoformat(since)
+    daily = []
+    for i in range((date.fromisoformat(today) - start).days + 1):
+        d = (start + timedelta(days=i)).isoformat()
+        v, u = by_day.get(d, (0, 0))
+        daily.append({"day": d, "views": v, "unique": u})
+    return {"total_views": total_views, "total_unique": total_unique,
+            "today_views": today_views, "today_unique": today_unique, "daily": daily}
 
 
 # ───────── 미디어 (관리자가 이미지 여러 개 + 음원 관리) ─────────

@@ -429,6 +429,7 @@ const loadImg = url => new Promise((ok, no) => { const im = new Image(); im.onlo
 })();
 async function loadNotes() { try { notes = await (await fetch('/api/guestbook?limit=15')).json(); } catch {} }
 loadNotes(); setInterval(loadNotes, 30000);
+fetch('/api/visit', { method: 'POST' }).catch(() => {}); // 접속자 수 집계
 </script>
 </body>
 </html>

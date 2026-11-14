@@ -39,7 +39,18 @@
 <body><main>
 <h1>📝 방명록 관리자</h1>
 <div class="bar"><input id="token" type="password" placeholder="ADMIN_TOKEN"><button id="login">접속</button></div>
-<div class="tabs"><button id="tabG" class="on">방명록</button><button id="tabM">이미지·음원·문구</button></div>
+<div class="tabs"><button id="tabG" class="on">방명록</button><button id="tabS">접속자</button><button id="tabM">이미지·음원·문구</button></div>
+<section id="secS" hidden>
+  <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">
+    <div class="card"><div class="n">오늘 방문자</div><b id="stTodayU" style="font-size:28px;color:#5fd3a0">-</b><div class="n" id="stTodayV"></div></div>
+    <div class="card"><div class="n">총 방문자 (중복 제외)</div><b id="stTotalU" style="font-size:28px;color:#5fd3a0">-</b></div>
+    <div class="card"><div class="n">총 접속 수</div><b id="stTotalV" style="font-size:28px;color:#5fd3a0">-</b></div>
+  </div>
+  <h2>최근 14일 <span class="n">(막대: 방문자 / 숫자: 방문자·접속)</span></h2>
+  <div id="stDaily"></div>
+  <div class="bar" style="margin-top:10px"><button id="stReload">새로고침</button></div>
+  <div class="n">같은 사람이 10분 안에 새로고침한 건 1번으로 세요. IP는 저장하지 않고 해시만 저장해요.</div>
+</section>
 <section id="secM" hidden>
   <h2>화면 문구</h2>
   <div class="bar"><input id="sHandle" placeholder="@인스타 아이디" maxlength="40"><input id="sName" placeholder="상단 이름 (SANTA PENGU)" maxlength="40"></div>
@@ -101,9 +112,29 @@ function row(e) {
 $('login').onclick = () => { token = $('token').value.trim(); sessionStorage.setItem('adminToken', token); load(true); loadMedia(); };
 
 // ───────── 탭 ─────────
-const tab = m => { $('secG').hidden = m; $('secM').hidden = !m; $('tabG').classList.toggle('on', !m); $('tabM').classList.toggle('on', m); };
-$('tabG').onclick = () => tab(false);
-$('tabM').onclick = () => { tab(true); loadMedia(); };
+const tab = k => { for (const [id, sec] of [['tabG', 'secG'], ['tabS', 'secS'], ['tabM', 'secM']]) { $(sec).hidden = id !== k; $(id).classList.toggle('on', id === k); } };
+$('tabG').onclick = () => tab('tabG');
+$('tabS').onclick = () => { tab('tabS'); loadStats(); };
+$('tabM').onclick = () => { tab('tabM'); loadMedia(); };
+
+// ───────── 접속자 통계 ─────────
+async function loadStats() {
+  try {
+    const d = await api('/api/admin/stats?days=14');
+    $('stTodayU').textContent = d.today_unique.toLocaleString(); $('stTodayV').textContent = `접속 ${d.today_views.toLocaleString()}회`;
+    $('stTotalU').textContent = d.total_unique.toLocaleString(); $('stTotalV').textContent = d.total_views.toLocaleString();
+    const max = Math.max(1, ...d.daily.map(x => x.unique));
+    $('stDaily').replaceChildren(...d.daily.slice().reverse().map(x => {
+      const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:8px;margin:4px 0;font-size:13px';
+      const day = document.createElement('span'); day.style.cssText = 'width:86px;color:#8a96a0'; day.textContent = x.day.slice(5);
+      const bar = document.createElement('div'); bar.style.cssText = `height:14px;border-radius:4px;background:#5fd3a0;width:${Math.max(2, x.unique / max * 60)}%`;
+      const num = document.createElement('span'); num.textContent = `${x.unique} · ${x.views}`;
+      row.append(day, bar, num); return row;
+    }));
+    $('mmsg').textContent = '';
+  } catch (err) { $('msg').textContent = err.message; }
+}
+$('stReload').onclick = loadStats;
 
 // ───────── 이미지·음원 ─────────
 async function loadMedia() {
