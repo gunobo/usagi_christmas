@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: usagi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-usagi}
+      POSTGRES_DB: usagi
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U usagi"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://usagi:${POSTGRES_PASSWORD:-usagi}@db:5432/usagi
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8088:80"   # Cloudflare Tunnel → http://localhost:8088
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
