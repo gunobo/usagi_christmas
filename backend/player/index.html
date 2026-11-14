@@ -46,7 +46,7 @@ const ANSI16 = [[0,0,0],[205,49,49],[13,188,121],[229,229,16],[36,114,200],[188,
   [102,102,102],[241,76,76],[35,209,139],[245,245,67],[59,142,234],[214,112,214],[41,184,219],[255,255,255]];
 const nearestAnsi = (r, g2, b) => { let best = 0, bd = 1e9; ANSI16.forEach(([R, G, B], i) => { const d = (R - r) ** 2 + (G - g2) ** 2 + (B - b) ** 2; if (d < bd) { bd = d; best = i; } }); return ANSI16[best]; };
 function prepImage(img) {
-  const scale = Math.min(720 / img.width, 900 / img.height);
+  const scale = Math.min(980 / img.width, 1110 / img.height); // 화면 꽉 차게 (상단 HUD 아래까지)
   const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const o = c.getContext('2d'); o.drawImage(img, 0, 0, w, h);
