@@ -14,11 +14,17 @@
   #play{font:800 20px system-ui;padding:16px 38px;border-radius:999px;border:0;background:#e5484d;color:#fff;cursor:pointer;
         box-shadow:0 0 0 6px rgba(229,72,77,.25),0 10px 30px rgba(0,0,0,.4)}
   #ui small{color:#c9d1ff;font-size:14px}
+  #styles{position:absolute;top:8.5%;left:50%;transform:translateX(-50%);display:flex;gap:6px;padding:4px;border-radius:999px;
+          background:rgba(7,11,31,.55);backdrop-filter:blur(4px);z-index:3}
+  #styles button{font:700 12px ui-monospace,Menlo,monospace;letter-spacing:.06em;padding:7px 12px;border-radius:999px;border:0;
+          background:transparent;color:#c9d1ff;cursor:pointer}
+  #styles button.on{background:#f2c14e;color:#1a1544}
 </style>
 </head>
 <body>
 <div id="wrap">
   <canvas id="c" width="1080" height="1920"></canvas>
+  <div id="styles"><button data-s="ascii">ASCII</button><button data-s="ansi">ANSI</button><button data-s="pixel">PIXEL</button></div>
   <div id="ui">
     <button id="play">▶ 시작하기</button>
     <small id="msg">🎧 이어폰을 끼면 소리가 머리 주위를 돌아요</small>
@@ -397,6 +403,18 @@ document.getElementById('play').onclick = async () => {
   if (!looping) { looping = true; requestAnimationFrame(frame); }
 };
 
+// 사용자 스타일 선택 (브라우저에 기억)
+let picked = null;
+try { picked = localStorage.getItem('style'); } catch {}
+function setStyle(v, save = true) {
+  if (!['ascii', 'ansi', 'pixel'].includes(v)) v = 'ascii';
+  STYLE = v;
+  document.querySelectorAll('#styles button').forEach(b => b.classList.toggle('on', b.dataset.s === v));
+  if (save) { picked = v; try { localStorage.setItem('style', v); } catch {} }
+}
+document.querySelectorAll('#styles button').forEach(b => b.onclick = () => setStyle(b.dataset.s));
+setStyle(picked || 'ascii', false);
+
 // 관리자가 올린 이미지·음원·문구 + 방명록 전광판
 const loadImg = url => new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = url; });
 (async () => {
@@ -405,7 +423,8 @@ const loadImg = url => new Promise((ok, no) => { const im = new Image(); im.onlo
     const imgs = (await Promise.allSettled(m.images.map(x => loadImg(x.url)))).filter(r => r.status === 'fulfilled').map(r => r.value);
     if (imgs.length) sets = imgs.map(prepImage);
     if (m.audio) audioUrl = m.audio.url;
-    if (m.settings) ({ name: NAME, edition: EDITION, title: TITLE, handle: HANDLE, style: STYLE } = m.settings);
+    if (m.settings) ({ name: NAME, edition: EDITION, title: TITLE, handle: HANDLE } = m.settings);
+    if (!picked && m.settings?.style) setStyle(m.settings.style, false); // 관리자 기본값 (사용자가 고른 게 없을 때)
   } catch {}
 })();
 async function loadNotes() { try { notes = await (await fetch('/api/guestbook?limit=15')).json(); } catch {} }
